@@ -1,0 +1,8 @@
+#忽略listing和output文件夹，因为它会在项目再次编译时，重新生成相应的文件包括文件夹
+listing/
+output/
+#忽略project下的所有文件，但不包括*.uvproj项目文件
+project/*
+!project/*.uvproj
+
+
