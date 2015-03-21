@@ -111,6 +111,13 @@ void evaluateDirectionCosine(int16_t accel[3],float a[3],float accel_res[3])
 
 }
 
+
+void evaluateQuat(float accel_res[3],int16_t accel[3],float q[4])
+{
+	accel_res[0]  = (q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3])*accel[0] + (2*q[0]*q[3]+2*q[1]*q[2])*accel[1]+(-2*q[0]*q[2]+2*q[1]*q[3])*accel[3];
+	accel_res[1]	= (-2*q[0]*q[3]+2*q[1]*q[2])*accel[0] + (q[0]*q[0] - q[1]*q[1] + q[2]*q[2] - q[3]*q[3])*accel[1] + (2*q[0]*q[1]+2*q[2]*q[3])*accel[2];
+	accel_res[2]	=	(2*q[0]*q[2]+2*q[1]*q[3])*accel[0] + (-2*q[0]*q[1]+2*q[2]*q[3])*accel[1]+(q[0]*q[0] - q[1]*q[1] - q[2]*q[2] + q[3]*q[3])*accel[2];
+}
 int main(void)
 {
 	struct int_param_s int_param;
@@ -119,7 +126,7 @@ int main(void)
 	float accel_res[3],gyro_res[3];
 	long quat[4];
   unsigned long timestamp; 
-	short sensors;
+	short sensors = INV_XYZ_GYRO| INV_XYZ_ACCEL | INV_WXYZ_QUAT;
 unsigned char more;
 
 	float q[4],Pitch, Roll,Yaw;
@@ -168,13 +175,14 @@ unsigned char more;
 //			 Pitch = asin(-2 * q[1] * q[3] + 2 * q[0]* q[2])* 57.3; // pitch
 //			 Roll = atan2(2 * q[2] * q[3] + 2 * q[0] * q[1], -2 * q[1] * q[1] - 2 * q[2]* q[2] + 1)* 57.3; // roll
 //			 Yaw = 	atan2(2*(q[1]*q[2] + q[0]*q[3]),q[0]*q[0]+q[1]*q[1]-q[2]*q[2]-q[3]*q[3]) * 57.3;		//感觉没有价值，注掉
-			gyro_res[1] = asin(-2 * q[1] * q[3] + 2 * q[0]* q[2]); // pitch
-			 gyro_res[2] = atan2(2 * q[2] * q[3] + 2 * q[0] * q[1], -2 * q[1] * q[1] - 2 * q[2]* q[2] + 1); // roll
+			gyro_res[2] = asin(-2 * q[1] * q[3] + 2 * q[0]* q[2]); // pitch
+			 gyro_res[1] = atan2(2 * q[2] * q[3] + 2 * q[0] * q[1], -2 * q[1] * q[1] - 2 * q[2]* q[2] + 1); // roll
 			 gyro_res[0] = 	atan2(2*(q[1]*q[2] + q[0]*q[3]),q[0]*q[0]+q[1]*q[1]-q[2]*q[2]-q[3]*q[3]) ;		//感觉没有价值，注掉
 //			printf("%f,%f,%f\n",Pitch,Roll, Yaw);
 			//printf("%3f,%3f,%3f\n",accel[0]/16384.0,accel[1]/16384.0, accel[2]/16384.0);
 			// printf("%3f,%3f,%3f\n",cos(1.57+Roll),cos(1.57+Pitch), cos(1.57+Yaw));
-			evaluateDirectionCosine(accel,gyro_res,accel_res);
+//			evaluateDirectionCosine(accel,gyro_res,accel_res);
+			evaluateQuat(accel_res,accel,q);
 			printf("%3f,%3f,%3f\n",accel_res[0]/16384.0,accel_res[1]/16384.0, accel_res[2]/16384.0);
 //Data_Send_Status(Pitch,Roll,-Yaw,gyro,accel);
 //			delay_ms(10);
