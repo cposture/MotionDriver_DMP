@@ -123,6 +123,13 @@ void evaluateQuat(float accel_res[3],float accel[3],float q[4])
     accel_res[1]	= (2*q[1]*q[2]-2*q[0]*q[3])						    *accel[0] + (q[0]*q[0] - q[1]*q[1] + q[2]*q[2] - q[3]*q[3])	    *accel[1]   + (2*q[0]*q[1]+2*q[2]*q[3])                         *accel[2];
     accel_res[2]	=	(2*q[0]*q[2]+2*q[1]*q[3])						*accel[0] + (-2*q[0]*q[1]+2*q[2]*q[3])                          *accel[1]	+(q[0]*q[0] - q[1]*q[1] - q[2]*q[2] + q[3]*q[3])	*accel[2];
 }
+/* 加速度值从基于载体坐标系转为参考坐标系 */
+void acc_convert(float accel_res[3],int16_t accel[3],float q[4])
+{
+    accel_res[0]    = (q[0]*q[0] + q[1]*q[1] - q[2]*q[2] - q[3]*q[3])	*accel[0] + (2*q[1]*q[2]-2*q[0]*q[3])	                        *accel[1]	+(2*q[0]*q[2]+2*q[1]*q[3])                          *accel[2];
+    accel_res[1]	= (2*q[0]*q[3]+2*q[1]*q[2])					        *accel[0] + (q[0]*q[0] - q[1]*q[1] + q[2]*q[2] - q[3]*q[3])	    *accel[1]   +(-2*q[0]*q[1]+2*q[2]*q[3])                         *accel[2];
+    accel_res[2]	= (2*q[1]*q[3]-2*q[0]*q[2])							*accel[0] + (2*q[0]*q[1]+2*q[2]*q[3])                           *accel[1]	+(q[0]*q[0] - q[1]*q[1] - q[2]*q[2] + q[3]*q[3])	*accel[2];
+}
 int main(void)
 {
     struct int_param_s int_param;
@@ -208,12 +215,17 @@ int main(void)
             */
 
             /* 基于四元数的转换矩阵，将参考坐标系的重力加速度转换成载体坐标系的加速度 */
-            evaluateQuat(accel_res,accel_g,q);
-
+//            evaluateQuat(accel_res,accel_g,q);
+            /* 将基于载体坐标系的加速度值转换为参考坐标系 */
+            acc_convert(accel_res,accel,q);
+            accel_show[0] = accel_res[0]/16384.0*100;
+            accel_show[1] = accel_res[1]/16384.0*100;
+            accel_show[2] = (accel_res[2]/16384.0-0.978833)*100;
+               
             /* 减去转换后的重力加速度，将载体坐标系各轴加速度增大至100倍，进行显示 */
-            accel_show[0] = (accel[0]/16384.0-accel_res[0])*100;
-            accel_show[1] = (accel[1]/16384.0-accel_res[1])*100;
-            accel_show[2] = (accel[2]/16384.0-accel_res[2])*100;
+//            accel_show[0] = (accel[0]/16384.0-accel_res[0])*100;
+//            accel_show[1] = (accel[1]/16384.0-accel_res[1])*100;
+//            accel_show[2] = (accel[2]/16384.0-accel_res[2])*100;
 
 //			Data_Send_Status(Pitch,Roll,-Yaw,gyro,accel);
             Send_Data(gyro,accel_show);
