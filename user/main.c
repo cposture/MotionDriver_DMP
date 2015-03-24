@@ -130,18 +130,54 @@ void acc_convert(float accel_res[3],int16_t accel[3],float q[4])
     accel_res[1]	= (2*q[0]*q[3]+2*q[1]*q[2])					        *accel[0] + (q[0]*q[0] - q[1]*q[1] + q[2]*q[2] - q[3]*q[3])	    *accel[1]   +(-2*q[0]*q[1]+2*q[2]*q[3])                         *accel[2];
     accel_res[2]	= (2*q[1]*q[3]-2*q[0]*q[2])							*accel[0] + (2*q[0]*q[1]+2*q[2]*q[3])                           *accel[1]	+(q[0]*q[0] - q[1]*q[1] - q[2]*q[2] + q[3]*q[3])	*accel[2];
 }
+
+/* Function: 加速度一重积分  V(n) = V(n-1) + 0.5 * (a(n) + a(n-1)) * dt
+*/
+void acc_to_vel(float vel[3],float a[3],float ap[3],unsigned long time)
+{
+    int i;
+    
+    for(i=0;i<3;i++)
+    {
+        vel[i] += 0.5 * (a[i]+ap[i]) * time * 0.001;
+    }
+    for(i=0;i<3;i++)
+    {
+        ap[i] = a[i];
+    }
+}
+
+void acc_to_disp(float disp[3],float a[3],float ap[3],float time)
+{
+    int i;
+    float a_ave;
+
+    for(i=0;i<3;i++)
+    {
+        a_ave = 0.5 * (a[i]+ap[i]);
+        disp[i] += 0.5 * a_ave * time *time;
+    }
+    for(i=0;i<3;i++)
+    {
+        ap[i] = a[i];
+    }
+}
+
 int main(void)
 {
     struct int_param_s int_param;
     signed char gyro_orientation[9] = {1, 0, 0, 0,1, 0, 0, 0, 1};
-    int16_t gyro[3], accel[3],accel_show[3];
-    float accel_res[3],accel_g[3];
-    long quat[4];
-    unsigned long timestamp;
+    float accel_res[3],accel_g[3],accel_p[3] = {0},vel[3] = {0},accel_final[3],disp[3] = {0};
+    float q[4],Pitch, Roll,Yaw;
+
+    int16_t gyro[3], accel[3];
+    unsigned long timestamp,time_pre;
     short sensors = INV_XYZ_GYRO| INV_XYZ_ACCEL | INV_WXYZ_QUAT;
     unsigned char more;
+    long quat[4];
 
-    float q[4],Pitch, Roll,Yaw;
+    /* debug用的变量 */
+    int16_t accel_show[3],vel_show[3],disp_show[3];
 
     clock_conf();
 
@@ -174,10 +210,16 @@ int main(void)
     run_self_test();
 
     mpu_set_dmp_state(1);
-
+    
+    /* 用于除去重力，参考坐标系的Z轴加速度g转换成载体坐标系上的加速度 */
+    accel_g[0] = 0;
+    accel_g[1] = 0;
+    accel_g[2] = 0.978833;
+    dmp_read_fifo(gyro, accel, quat, &time_pre, &sensors, &more);
     while(1)
     {
         dmp_read_fifo(gyro, accel, quat, &timestamp, &sensors, &more);
+//        printf("%ld\n",timestamp);
         if((sensors & INV_WXYZ_QUAT))
         {
             /* DMP所得的四元数 */
@@ -189,8 +231,7 @@ int main(void)
             /* 由四元数所得的欧拉角，单位度 */
             Pitch = asin(-2 * q[1] * q[3] + 2 * q[0]* q[2]) *57.3; // pitch
             Roll = atan2(2 * q[2] * q[3] + 2 * q[0] * q[1], -2 * q[1] * q[1] - 2 * q[2]* q[2] + 1)*57.3; // roll
-            Yaw = 	atan2(2*(q[1]*q[2] + q[0]*q[3]),q[0]*q[0]+q[1]*q[1]-q[2]*q[2]-q[3]*q[3])*57.3 ;		//感觉没有价值，注掉
-            
+            Yaw = 	atan2(2*(q[1]*q[2] + q[0]*q[3]),q[0]*q[0]+q[1]*q[1]-q[2]*q[2]-q[3]*q[3])*57.3 ;		//感觉没有价值，注掉     
 //			printf("%3f,%3f,%3f\n",Pitch,Roll, Yaw);
 
             /* accel_bias静止时的加速度值 long accel_bias[3]={700,-239,14890}
@@ -204,11 +245,6 @@ int main(void)
             printf("%3f,%3f,%3f\n",accel[0]/16384.0,accel[1]/16384.0, accel[2]/16384.0);
             */
 
-            /* 用于除去重力，参考坐标系的Z轴加速度g转换成载体坐标系上的加速度 */
-            accel_g[0] = 0;
-            accel_g[1] = 0;
-            accel_g[2] = 0.978833;
-
             /*
             保留，由欧拉角得到转换矩阵，不准，不建议使用
             evaluateDirectionCosine(accel_g,gyro_res,accel_res);
@@ -218,17 +254,38 @@ int main(void)
 //            evaluateQuat(accel_res,accel_g,q);
             /* 将基于载体坐标系的加速度值转换为参考坐标系 */
             acc_convert(accel_res,accel,q);
-            accel_show[0] = accel_res[0]/16384.0*100;
-            accel_show[1] = accel_res[1]/16384.0*100;
-            accel_show[2] = (accel_res[2]/16384.0-0.978833)*100;
-               
+            accel_final[0] = accel_res[0]/16384.0*100;
+            accel_final[1] = accel_res[1]/16384.0*100;
+            accel_final[2] = (accel_res[2]/16384.0-0.978833)*100;
+            /*
+            accel_show [0] = accel_final[0];  
+            accel_show [1] = accel_final[1];  
+            accel_show [2] = accel_final[2];  
+            Send_Data(gyro,accel_show);
+            */
+            
             /* 减去转换后的重力加速度，将载体坐标系各轴加速度增大至100倍，进行显示 */
 //            accel_show[0] = (accel[0]/16384.0-accel_res[0])*100;
 //            accel_show[1] = (accel[1]/16384.0-accel_res[1])*100;
 //            accel_show[2] = (accel[2]/16384.0-accel_res[2])*100;
+//            Send_Data(gyro,accel_show);
 
+            /* 加速度一重积分得到速度 */
+//            acc_to_vel(vel,accel_final,accel_p,timestamp - time_pre); 
+//            time_pre = timestamp;
+//            vel_show[0] = vel[0];
+//            vel_show[1] = vel[1];
+//            vel_show[2] = vel[2];
+//            Send_Data(gyro,vel_show);
+            
+            acc_to_disp(disp,accel_final,accel_p,(timestamp - time_pre)*0.001);
+            time_pre = timestamp;
+            disp_show[0] = disp[0] * 100;
+            disp_show[1] = disp[1] * 100;
+            disp_show[2] = disp[2] * 100;
+            Send_Data(gyro,disp_show);
 //			Data_Send_Status(Pitch,Roll,-Yaw,gyro,accel);
-            Send_Data(gyro,accel_show);
+//            Send_Data(gyro,(int16_t*)accel_show);
 //			delay_ms(10);
         }
     }
