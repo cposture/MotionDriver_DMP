@@ -147,7 +147,7 @@ void acc_to_vel(float vel[3],float a[3],float ap[3],unsigned long time)
     }
 }
 
-void acc_to_disp(float disp[3],float a[3],float ap[3],float time)
+void vel_to_disp(float disp[3],float a[3],float ap[3],float time)
 {
     int i;
     float a_ave;
