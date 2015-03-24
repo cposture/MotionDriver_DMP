@@ -147,19 +147,17 @@ void acc_to_vel(float vel[3],float a[3],float ap[3],unsigned long time)
     }
 }
 
-void vel_to_disp(float disp[3],float a[3],float ap[3],float time)
+void vel_to_disp(float disp[3],float vel[3],float velp[3],float time)
 {
     int i;
-    float a_ave;
 
     for(i=0;i<3;i++)
     {
-        a_ave = 0.5 * (a[i]+ap[i]);
-        disp[i] += 0.5 * a_ave * time *time;
+        disp[i] += 0.5 * (vel[i] + velp[i]) * time;
     }
     for(i=0;i<3;i++)
     {
-        ap[i] = a[i];
+        velp[i] = vel[i];
     }
 }
 
@@ -167,7 +165,7 @@ int main(void)
 {
     struct int_param_s int_param;
     signed char gyro_orientation[9] = {1, 0, 0, 0,1, 0, 0, 0, 1};
-    float accel_res[3],accel_g[3],accel_p[3] = {0},vel[3] = {0},accel_final[3],disp[3] = {0};
+    float accel_res[3],accel_g[3],accel_p[3] = {0},vel[3] = {0},velp[3] = {0},accel_final[3],disp[3] = {0};
     float q[4],Pitch, Roll,Yaw;
 
     int16_t gyro[3], accel[3];
@@ -271,19 +269,19 @@ int main(void)
 //            Send_Data(gyro,accel_show);
 
             /* 加速度一重积分得到速度 */
-//            acc_to_vel(vel,accel_final,accel_p,timestamp - time_pre); 
-//            time_pre = timestamp;
-//            vel_show[0] = vel[0];
-//            vel_show[1] = vel[1];
-//            vel_show[2] = vel[2];
-//            Send_Data(gyro,vel_show);
-            
-            acc_to_disp(disp,accel_final,accel_p,(timestamp - time_pre)*0.001);
+            acc_to_vel(vel,accel_final,accel_p,timestamp - time_pre); 
             time_pre = timestamp;
-            disp_show[0] = disp[0] * 100;
-            disp_show[1] = disp[1] * 100;
-            disp_show[2] = disp[2] * 100;
-            Send_Data(gyro,disp_show);
+            vel_show[0] = vel[0];
+            vel_show[1] = vel[1];
+            vel_show[2] = vel[2];
+            Send_Data(gyro,vel_show);
+
+//            vel_to_disp(disp,vel,velp,(timestamp - time_pre)*0.001);
+//            time_pre = timestamp;
+//            disp_show[0] = disp[0] * 100;
+//            disp_show[1] = disp[1] * 100;
+//            disp_show[2] = disp[2] * 100;
+//            Send_Data(gyro,disp_show);
 //			Data_Send_Status(Pitch,Roll,-Yaw,gyro,accel);
 //            Send_Data(gyro,(int16_t*)accel_show);
 //			delay_ms(10);
