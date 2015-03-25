@@ -257,12 +257,12 @@ int main(void)
             accel_final[0] = accel_res[0]/16384.0*100;
             accel_final[1] = accel_res[1]/16384.0*100;
             accel_final[2] = (accel_res[2]/16384.0-0.978833)*100;
-            /*
+
             accel_show [0] = accel_final[0];  
             accel_show [1] = accel_final[1];  
             accel_show [2] = accel_final[2];  
             Send_Data(gyro,accel_show);
-            */
+
             
             /* 减去转换后的重力加速度，将载体坐标系各轴加速度增大至100倍，进行显示 */
 //            accel_show[0] = (accel[0]/16384.0-accel_res[0])*100;
@@ -273,17 +273,17 @@ int main(void)
             /* 加速度一重积分得到速度 */
 //            acc_to_vel(vel,accel_final,accel_p,timestamp - time_pre); 
 //            time_pre = timestamp;
-//            vel_show[0] = vel[0];
-//            vel_show[1] = vel[1];
-//            vel_show[2] = vel[2];
+//            vel_show[0] = vel[0] *100 ;
+//            vel_show[1] = vel[1] *100;
+//            vel_show[2] = 0;
 //            Send_Data(gyro,vel_show);
             
-            acc_to_disp(disp,accel_final,accel_p,(timestamp - time_pre)*0.001);
-            time_pre = timestamp;
-            disp_show[0] = disp[0] * 100;
-            disp_show[1] = disp[1] * 100;
-            disp_show[2] = disp[2] * 100;
-            Send_Data(gyro,disp_show);
+//            acc_to_disp(disp,accel_final,accel_p,(timestamp - time_pre)*0.001);
+//            time_pre = timestamp;
+//            disp_show[0] = disp[0] * 100;
+//            disp_show[1] = disp[1] * 100;
+//            disp_show[2] = disp[2] * 100;
+//            Send_Data(gyro,disp_show);
 //			Data_Send_Status(Pitch,Roll,-Yaw,gyro,accel);
 //            Send_Data(gyro,(int16_t*)accel_show);
 //			delay_ms(10);
