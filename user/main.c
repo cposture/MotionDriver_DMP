@@ -163,6 +163,40 @@ void acc_to_disp(float disp[3],float a[3],float ap[3],float time)
     }
 }
 
+#define ACC_FILTER_MOUNT	10
+int16_t	acc_xyz_data[3][ACC_FILTER_MOUNT] = {0};
+int16_t	acc_data_index = 0;
+
+/* 对原始数据加速度值进行滤波 */
+void acc_filter(int16_t accel[3],int16_t acc_ave[3])
+{
+	int i,j;
+	int32_t	acc_data_sum[3];
+	
+	for(i=0;i<3;i++)
+	{
+		acc_xyz_data[i][acc_data_index] = accel[i];
+		acc_data_sum[i] = 0;
+	}
+	
+	acc_data_index++;
+	
+	if(acc_data_index == ACC_FILTER_MOUNT)
+	{
+		acc_data_index = 0;
+	}
+	
+	for(i=0;i<3;i++)
+	{
+		for(j=0;j<ACC_FILTER_MOUNT;j++)
+		{
+			acc_data_sum[i] +=  acc_xyz_data[i][j];
+		}
+		acc_ave[i] = acc_data_sum[i]/ACC_FILTER_MOUNT;
+	}
+}
+
+
 int main(void)
 {
     struct int_param_s int_param;
@@ -170,7 +204,7 @@ int main(void)
     float accel_res[3],accel_g[3],accel_p[3] = {0},vel[3] = {0},accel_final[3],disp[3] = {0};
     float q[4],Pitch, Roll,Yaw;
 
-    int16_t gyro[3], accel[3];
+    int16_t gyro[3], accel[3],accel_ave[3];
     unsigned long timestamp,time_pre;
     short sensors = INV_XYZ_GYRO| INV_XYZ_ACCEL | INV_WXYZ_QUAT;
     unsigned char more;
@@ -211,11 +245,12 @@ int main(void)
 
     mpu_set_dmp_state(1);
     
+		delay_ms(10000);
+		
     /* 用于除去重力，参考坐标系的Z轴加速度g转换成载体坐标系上的加速度 */
     accel_g[0] = 0;
     accel_g[1] = 0;
     accel_g[2] = 0.978833;
-    dmp_read_fifo(gyro, accel, quat, &time_pre, &sensors, &more);
     while(1)
     {
         dmp_read_fifo(gyro, accel, quat, &timestamp, &sensors, &more);
@@ -233,7 +268,9 @@ int main(void)
             Roll = atan2(2 * q[2] * q[3] + 2 * q[0] * q[1], -2 * q[1] * q[1] - 2 * q[2]* q[2] + 1)*57.3; // roll
             Yaw = 	atan2(2*(q[1]*q[2] + q[0]*q[3]),q[0]*q[0]+q[1]*q[1]-q[2]*q[2]-q[3]*q[3])*57.3 ;		//感觉没有价值，注掉     
 //			printf("%3f,%3f,%3f\n",Pitch,Roll, Yaw);
-
+				}
+				if((sensors & INV_XYZ_ACCEL))
+				{
             /* accel_bias静止时的加速度值 long accel_bias[3]={700,-239,14890}
             accel[0] -= accel_bias[0];
             accel[1] -= accel_bias[1];
@@ -252,8 +289,10 @@ int main(void)
 
             /* 基于四元数的转换矩阵，将参考坐标系的重力加速度转换成载体坐标系的加速度 */
 //            evaluateQuat(accel_res,accel_g,q);
+					
+						acc_filter(accel,accel_ave);
             /* 将基于载体坐标系的加速度值转换为参考坐标系 */
-            acc_convert(accel_res,accel,q);
+            acc_convert(accel_res,accel_ave,q);
             accel_final[0] = accel_res[0]/16384.0*100;
             accel_final[1] = accel_res[1]/16384.0*100;
             accel_final[2] = (accel_res[2]/16384.0-0.978833)*100;
@@ -286,8 +325,8 @@ int main(void)
 //            Send_Data(gyro,disp_show);
 //			Data_Send_Status(Pitch,Roll,-Yaw,gyro,accel);
 //            Send_Data(gyro,(int16_t*)accel_show);
+				}
 //			delay_ms(10);
-        }
     }
 }
 
