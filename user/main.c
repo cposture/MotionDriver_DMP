@@ -15,7 +15,8 @@ else \
 printf("%s",no_bug);}
 
 #define DEFAULT_MPU_HZ  (100)
-
+#define ACCEL_WINDOW_H	400
+#define ACCEL_WINDOW_L	-400
 /*函数功能：根据匿名最新上位机协议写的显示姿态的程序
  *具体原理看匿名的讲解视频
  */
@@ -124,7 +125,7 @@ void evaluateQuat(float accel_res[3],float accel[3],float q[4])
     accel_res[2]	=	(2*q[0]*q[2]+2*q[1]*q[3])						*accel[0] + (-2*q[0]*q[1]+2*q[2]*q[3])                          *accel[1]	+(q[0]*q[0] - q[1]*q[1] - q[2]*q[2] + q[3]*q[3])	*accel[2];
 }
 /* 加速度值从基于载体坐标系转为参考坐标系 */
-void acc_convert(float accel_res[3],int16_t accel[3],float q[4])
+void acc_convert(int16_t accel_res[3],int16_t accel[3],float q[4])
 {
     accel_res[0]    = (q[0]*q[0] + q[1]*q[1] - q[2]*q[2] - q[3]*q[3])	*accel[0] + (2*q[1]*q[2]-2*q[0]*q[3])	                        *accel[1]	+(2*q[0]*q[2]+2*q[1]*q[3])                          *accel[2];
     accel_res[1]	= (2*q[0]*q[3]+2*q[1]*q[2])					        *accel[0] + (q[0]*q[0] - q[1]*q[1] + q[2]*q[2] - q[3]*q[3])	    *accel[1]   +(-2*q[0]*q[1]+2*q[2]*q[3])                         *accel[2];
@@ -163,55 +164,134 @@ void acc_to_disp(float disp[3],float a[3],float ap[3],float time)
     }
 }
 
-#define ACC_FILTER_MOUNT	10
-int16_t	acc_xyz_data[3][ACC_FILTER_MOUNT] = {0};
+#define ACC_FILTER_COUNT	16
+int16_t	acc_xyz_data[3][ACC_FILTER_COUNT] = {0};
 int16_t	acc_data_index = 0;
 
 /* 对原始数据加速度值进行滤波 */
 void acc_filter(int16_t accel[3],int16_t acc_ave[3])
 {
 	int i,j;
-	int32_t	acc_data_sum[3];
+	int32_t	acc_data_sum[3] = {0};
 	
+	//先进行一次机械窗口滤波
+	for(i = 0; i < 3; i++)
+	{
+		if(accel[i] < ACCEL_WINDOW_H && accel[i] > ACCEL_WINDOW_L)
+			accel[i] = 0;
+	}
+	
+	//将i轴的加速度保存在acc_data_index列中
 	for(i=0;i<3;i++)
 	{
 		acc_xyz_data[i][acc_data_index] = accel[i];
-		acc_data_sum[i] = 0;
 	}
 	
+	//acc_data_index循环加1
 	acc_data_index++;
 	
-	if(acc_data_index == ACC_FILTER_MOUNT)
+	if(acc_data_index == ACC_FILTER_COUNT)
 	{
 		acc_data_index = 0;
 	}
 	
+	//行求和
 	for(i=0;i<3;i++)
 	{
-		for(j=0;j<ACC_FILTER_MOUNT;j++)
+		for(j=0;j<ACC_FILTER_COUNT;j++)
 		{
 			acc_data_sum[i] +=  acc_xyz_data[i][j];
 		}
-		acc_ave[i] = acc_data_sum[i]/ACC_FILTER_MOUNT;
+		acc_ave[i] = acc_data_sum[i]/ACC_FILTER_COUNT;
+	}
+	
+	//再对acc_ave进行一次机械窗口滤波
+	for(i=0;i<3;i++)
+	{
+		if(acc_ave[i] < ACCEL_WINDOW_H && acc_ave[i] > ACCEL_WINDOW_L)
+			acc_ave[i] = 0;
 	}
 }
 
+/* 机械滤波 */
+void movement_end_check(short int accel_n[3],long int vel[2][3])
+{
+	static unsigned int countx = 0, county = 0, countz = 0;
+	//处理X轴
+	if (accel_n[0]==0) //we count the number of acceleration samples that equals cero
+	{ 
+		countx++;
+	}
+	else 
+	{ 
+		countx =0;
+	}
+	if (countx>=25) //if this number exceeds 25, we can assume that velocity is cero
+	{
+		vel[1][0]=0;
+		vel[0][0]=0;
+	}
+	//处理Y轴
+	if (accel_n[1]==0) //we do the same for the Y axis
+	{ 
+		county++;
+	}
+	else 
+	{ 
+		county =0;
+	}
+	if (county>=25)
+	{
+		vel[1][1]=0;
+		vel[0][1]=0;
+	}
+	//处理Z轴
+	if(accel_n[2] == 0)
+	{
+		countz++;
+	}
+	if(countz >= 25)
+	{
+		vel[1][2]=0;
+		vel[0][2]=0;
+	}
+}
+
+void position(short int accel_n[2][3],long int vel[2][3],long int displayment[2][3])
+{
+	int 					i;
+
+	for(i = 0; i < 3; i++)
+	{
+		vel[1][i] = vel[0][i] + ((accel_n[0][i]+accel_n[1][i])>>1);
+		displayment[1][i] = displayment[0][i] + ((vel[1][i]+vel[0][i])>>1);
+	}
+	
+	for(i = 0; i < 3; i++)
+	{
+		vel[0][i] = vel[1][i];
+		displayment[0][i] = displayment[1][i];
+	}
+}
 
 int main(void)
 {
     struct int_param_s int_param;
     signed char gyro_orientation[9] = {1, 0, 0, 0,1, 0, 0, 0, 1};
-    float accel_res[3],accel_g[3],accel_p[3] = {0},vel[3] = {0},accel_final[3],disp[3] = {0};
+    float  accel_g[3],accel_p[3] = {0},accel_final[3];
     float q[4],Pitch, Roll,Yaw;
 
-    int16_t gyro[3], accel[3],accel_ave[3];
+    int16_t gyro[3], accel[3],accel_ave[3],accel_res[2][3]={0},disp_show[3],vel_show[3];
+		long int vel[2][3]={0},disp[2][3] = {0};
     unsigned long timestamp,time_pre;
     short sensors = INV_XYZ_GYRO| INV_XYZ_ACCEL | INV_WXYZ_QUAT;
     unsigned char more;
     long quat[4];
 
+		unsigned long time1,time2;
+
     /* debug用的变量 */
-    int16_t accel_show[3],vel_show[3],disp_show[3];
+    int16_t accel_show[3],i;
 
     clock_conf();
 
@@ -251,8 +331,10 @@ int main(void)
     accel_g[0] = 0;
     accel_g[1] = 0;
     accel_g[2] = 0.978833;
+		
     while(1)
     {
+				get_clock_ms(&time1);
         dmp_read_fifo(gyro, accel, quat, &timestamp, &sensors, &more);
 //        printf("%ld\n",timestamp);
         if((sensors & INV_WXYZ_QUAT))
@@ -290,19 +372,46 @@ int main(void)
             /* 基于四元数的转换矩阵，将参考坐标系的重力加速度转换成载体坐标系的加速度 */
 //            evaluateQuat(accel_res,accel_g,q);
 					
+						/* 先对加速度进行滤波 */
 						acc_filter(accel,accel_ave);
+						
             /* 将基于载体坐标系的加速度值转换为参考坐标系 */
-            acc_convert(accel_res,accel_ave,q);
-            accel_final[0] = accel_res[0]/16384.0*100;
-            accel_final[1] = accel_res[1]/16384.0*100;
-            accel_final[2] = (accel_res[2]/16384.0-0.978833)*100;
+            acc_convert(accel_res[1],accel_ave,q);
+						
+						for(i=0;i<3;i++)
+						{
+							if(accel_res[1][i] < ACCEL_WINDOW_H && accel_res[1][i] > ACCEL_WINDOW_L)
+								accel_res[1][i] = 0;
+						}
+						
+						accel_res[1][2] -= 14890;
+//            accel_final[0] = accel_res[1][0];
+//            accel_final[1] = accel_res[1][1];
+//            accel_final[2] = accel_res[1][2] - 14890;
+//						
+//						
+//            accel_show [0] = accel_final[0];  
+//            accel_show [1] = accel_final[1];  
+//            accel_show [2] = accel_final[2];  
+//            Send_Data(gyro,accel_show);
+//						if(accel_res[1][1] || accel_res[0][1])
+//							printf("%d,%d\r\n",accel_res[1][1],accel_res[0][1]);
+						position(accel_res,vel,disp);
+						
+						disp_show[0] = disp[1][0]/16384;
+						disp_show[1] = disp[1][1]/16384;
+						disp_show[2] = disp[1][2]/16384;
+						
+						vel_show[0] = vel[1][0];
+						vel_show[1] = vel[1][1];
+						vel_show[2] = vel[1][2];
+						
+						Send_Data(vel_show,disp_show);
+						movement_end_check(accel_res[1],vel);
+						accel_res[0][0] = accel_res[1][0];
+						accel_res[0][1] = accel_res[1][1];
+						accel_res[0][2] = accel_res[1][2];
 
-            accel_show [0] = accel_final[0];  
-            accel_show [1] = accel_final[1];  
-            accel_show [2] = accel_final[2];  
-            Send_Data(gyro,accel_show);
-
-            
             /* 减去转换后的重力加速度，将载体坐标系各轴加速度增大至100倍，进行显示 */
 //            accel_show[0] = (accel[0]/16384.0-accel_res[0])*100;
 //            accel_show[1] = (accel[1]/16384.0-accel_res[1])*100;
@@ -325,6 +434,8 @@ int main(void)
 //            Send_Data(gyro,disp_show);
 //			Data_Send_Status(Pitch,Roll,-Yaw,gyro,accel);
 //            Send_Data(gyro,(int16_t*)accel_show);
+				//get_clock_ms(&time2);
+				//printf("%ld\n",time2-time1);
 				}
 //			delay_ms(10);
     }
