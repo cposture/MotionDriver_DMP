@@ -125,7 +125,7 @@ void evaluateQuat(float accel_res[3],float accel[3],float q[4])
     accel_res[2]	=	(2*q[0]*q[2]+2*q[1]*q[3])						*accel[0] + (-2*q[0]*q[1]+2*q[2]*q[3])                          *accel[1]	+(q[0]*q[0] - q[1]*q[1] - q[2]*q[2] + q[3]*q[3])	*accel[2];
 }
 /* 加速度值从基于载体坐标系转为参考坐标系 */
-void acc_convert(int16_t accel_res[3],int16_t accel[3],float q[4])
+void acc_convert(long int accel_res[3],long int accel[3],float q[4])
 {
     accel_res[0]    = (q[0]*q[0] + q[1]*q[1] - q[2]*q[2] - q[3]*q[3])	*accel[0] + (2*q[1]*q[2]-2*q[0]*q[3])	                        *accel[1]	+(2*q[0]*q[2]+2*q[1]*q[3])                          *accel[2];
     accel_res[1]	= (2*q[0]*q[3]+2*q[1]*q[2])					        *accel[0] + (q[0]*q[0] - q[1]*q[1] + q[2]*q[2] - q[3]*q[3])	    *accel[1]   +(-2*q[0]*q[1]+2*q[2]*q[3])                         *accel[2];
@@ -169,7 +169,7 @@ int16_t	acc_xyz_data[3][ACC_FILTER_COUNT] = {0};
 int16_t	acc_data_index = 0;
 
 /* 对原始数据加速度值进行滤波 */
-void acc_filter(int16_t accel[3],int16_t acc_ave[3])
+void acc_filter(short int accel[3],long int acc_ave[3])
 {
 	int i,j;
 	int32_t	acc_data_sum[3] = {0};
@@ -214,7 +214,7 @@ void acc_filter(int16_t accel[3],int16_t acc_ave[3])
 }
 
 /* 机械滤波 */
-void movement_end_check(short int accel_n[3],long int vel[2][3])
+void movement_end_check(long int accel_n[3],long int vel[2][3])
 {
 	static unsigned int countx = 0, county = 0, countz = 0;
 	//处理X轴
@@ -257,7 +257,7 @@ void movement_end_check(short int accel_n[3],long int vel[2][3])
 	}
 }
 
-void position(short int accel_n[2][3],long int vel[2][3],long int displayment[2][3])
+void position(long int accel_n[2][3],long int vel[2][3],long int displayment[2][3])
 {
 	int 					i;
 
@@ -281,8 +281,8 @@ int main(void)
     float  accel_g[3],accel_p[3] = {0},accel_final[3];
     float q[4],Pitch, Roll,Yaw;
 
-    int16_t gyro[3], accel[3],accel_ave[3],accel_res[2][3]={0},disp_show[3],vel_show[3];
-		long int vel[2][3]={0},disp[2][3] = {0};
+    int16_t gyro[3], accel[3];
+		long int vel[2][3]={0},disp[2][3] = {0},accel_ave[3],accel_res[2][3]={0};
     unsigned long timestamp,time_pre;
     short sensors = INV_XYZ_GYRO| INV_XYZ_ACCEL | INV_WXYZ_QUAT;
     unsigned char more;
@@ -291,7 +291,7 @@ int main(void)
 		unsigned long time1,time2;
 
     /* debug用的变量 */
-    int16_t accel_show[3],i;
+    int16_t accel_show[3],i,disp_show[3],vel_show[3];
 
     clock_conf();
 
@@ -384,15 +384,11 @@ int main(void)
 								accel_res[1][i] = 0;
 						}
 						
-						accel_res[1][2] -= 14890;
-//            accel_final[0] = accel_res[1][0];
-//            accel_final[1] = accel_res[1][1];
-//            accel_final[2] = accel_res[1][2] - 14890;
-//						
-//						
-//            accel_show [0] = accel_final[0];  
-//            accel_show [1] = accel_final[1];  
-//            accel_show [2] = accel_final[2];  
+						accel_res[1][2] -= 14890;					
+						
+            accel_show [0] = accel_res[1][0]/16384;  
+            accel_show [1] = accel_res[1][1]/16384;  
+            accel_show [2] = accel_res[1][2]/16384;  
 //            Send_Data(gyro,accel_show);
 //						if(accel_res[1][1] || accel_res[0][1])
 //							printf("%d,%d\r\n",accel_res[1][1],accel_res[0][1]);
@@ -406,7 +402,7 @@ int main(void)
 						vel_show[1] = vel[1][1];
 						vel_show[2] = vel[1][2];
 						
-						Send_Data(vel_show,disp_show);
+						Send_Data(vel_show,accel_show);
 						movement_end_check(accel_res[1],vel);
 						accel_res[0][0] = accel_res[1][0];
 						accel_res[0][1] = accel_res[1][1];
